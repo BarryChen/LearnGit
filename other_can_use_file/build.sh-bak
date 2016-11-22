@@ -1,0 +1,43 @@
+#!/bin/bash
+
+build_parameter=$1
+case ${build_parameter} in
+ud312x* | userdebug*)
+    build_product=rk312x
+    build_variant=userdebug
+    ;;
+u312x* | user*)
+    build_product=rk312x
+    build_variant=user
+    ;;
+e312x* | eng*)
+    build_product=rk312x
+    build_variant=eng
+    ;;
+*)
+    echo "Can't find toolchain for unknown architecture: $ARCH"
+    exit 1
+    ;;
+esac
+
+if [[ $build_parameter =~ "lowmem" ]]; then
+    export ENABLE_LOWMEM_BUILD=yes
+fi
+
+source build/envsetup.sh
+lunch ${build_product}-${build_variant}
+
+#BUILD_PARALLEL_NUM = CPU_NUM x 3/4
+CPU_NUM=`cat /proc/cpuinfo  | egrep 'processor' | wc -l`
+CPU_NUM_x3=$(expr $CPU_NUM \* 3)
+BUILD_PARALLEL_NUM=$(expr $CPU_NUM_x3 \/ 4)
+
+# Build kernel
+ARCH=arm make -C kernel rockchip_defconfig
+ARCH=arm make -C kernel -j ${BUILD_PARALLEL_NUM} rk3128-box-rk88.img
+
+# Build droid
+make -j ${BUILD_PARALLEL_NUM} bootimage recoveryimage systemimage otapackage
+
+# Remake the filesystem
+source rk_mkimage.sh
